@@ -254,14 +254,17 @@ export const register: Register = (on, options) => {
             {`div ${div}% ${gaugeBar(div, divWarn)} · ${topicsText}`}
           </Text>
         ) : (
-            <Box gap={2} alignItems="flex-end">
-              {meter(
-                'div',
-                { label: 'div', value: `${div}%`, percent: div, level: gaugeLevel(div, divWarn) },
-                `${div}%`,
-              )}
-              <Text dimColor>{topicsText}</Text>
-            </Box>
+            meter(
+              'div',
+              {
+                label: 'div',
+                value: `${div}%`,
+                percent: div,
+                level: gaugeLevel(div, divWarn),
+                note: topicsText,
+              },
+              `${div}%`,
+            )
           )}
         {s !== null && (
           <Text dimColor>

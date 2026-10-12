@@ -238,6 +238,8 @@ export function ctxBarSvg(percent: number, level: Level, mark?: number, width = 
 export const METER_LABEL_W = 26
 export const METER_BAR_W = 140
 const METER_VALUE_GAP = 8
+const NOTE_GAP = 14
+const xmlText = (t: string) => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c)
 
 export type Meter = {
   label: string
@@ -246,11 +248,14 @@ export type Meter = {
   level: Level
   mark?: number
   hasCrab?: boolean
+  /** Dim text after the value, drawn on the same baseline (e.g. the topic names). */
+  note?: string
 }
 
 export function meterSize(m: Meter): { width: number; height: number } {
   const valueW = Math.ceil(m.value.length * 6.6) + 2
-  return { width: METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP + valueW, height: CTX_H }
+  const noteW = m.note ? NOTE_GAP + Math.ceil(m.note.length * 6.2) : 0
+  return { width: METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP + valueW + noteW, height: CTX_H }
 }
 
 /** One band item: label, bar (crab optional) and value in a single SVG, so every meter shares one baseline. */
@@ -262,7 +267,10 @@ export function meterSvg(m: Meter): string {
     height,
     `<text class="s" x="0" y="${base}" font-size="11">${m.label}</text>` +
       `<g transform="translate(${METER_LABEL_W},0)">${barBody(m.percent, m.level, m.mark, METER_BAR_W, m.hasCrab === true)}</g>` +
-      `<text class="t" x="${METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP}" y="${base}" font-size="11" font-weight="600">${m.value}</text>`,
+      `<text class="t" x="${METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP}" y="${base}" font-size="11" font-weight="600">${m.value}</text>` +
+      (m.note
+        ? `<text class="s" x="${METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP + Math.ceil(m.value.length * 6.6) + 2 + NOTE_GAP}" y="${base}" font-size="11">${xmlText(m.note)}</text>`
+        : ''),
   )
 }
 

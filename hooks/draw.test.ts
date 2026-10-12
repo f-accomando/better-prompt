@@ -186,3 +186,14 @@ test('meters share one height so they sit on one line', () => {
   expect(meterSvg(b)).not.toContain('class="patrol"')
   expect(meterSvg(a)).toContain('>38% 76k<')
 })
+
+test('a meter note sits on the same baseline and widens the meter', () => {
+  const m = { label: 'div', value: '42%', percent: 42, level: 'ok' as const }
+  const withNote = { ...m, note: 'topics 3 · a & b' }
+  expect(meterSize(withNote).width > meterSize(m).width).toBe(true)
+  expect(meterSize(withNote).height).toBe(meterSize(m).height)
+  const src = meterSvg(withNote)
+  expect(src).toContain('topics 3 · a &amp; b')
+  const ys = [...src.matchAll(/<text [^>]*y="([\d.]+)"/g)].map(x => x[1])
+  expect(new Set(ys).size).toBe(1)
+})
