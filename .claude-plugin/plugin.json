@@ -1,0 +1,51 @@
+{
+  "name": "better-prompt",
+  "version": "0.1.0",
+  "description": "Sharpens weak prompts, tracks topic drift, and shows context, 5h and 7d usage with an animated pixel crab.",
+  "author": {
+    "name": "Francesco Accomando"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "promptAssist": {
+      "type": "boolean",
+      "title": "Prompt assist",
+      "description": "Judge each prompt before it is sent: rewrite weak ones (blocking the send until you confirm) and flag topic changes. Off leaves prompts untouched; the context band stays. Toggle in session with /bp on|off.",
+      "default": true
+    },
+    "model": {
+      "type": "string",
+      "title": "Judge model",
+      "description": "Model that judges and rewrites prompts (a cheap one is enough).",
+      "options": [
+        "haiku",
+        "sonnet"
+      ],
+      "default": "haiku"
+    },
+    "autoRewrite": {
+      "type": "boolean",
+      "title": "Rewrite weak prompts",
+      "description": "With prompt assist on: put an improved version in the prompt box instead of sending a weak prompt. Off keeps only the topic-change advice.",
+      "default": true
+    },
+    "sizeWarnPercent": {
+      "type": "number",
+      "title": "Context warning %",
+      "description": "Suggest /compact when the context window is this full.",
+      "default": 60
+    },
+    "gaugeWarnPercent": {
+      "type": "number",
+      "title": "Gauge threshold %",
+      "description": "Where the context gauge marks its limit (10-95). Only colours the gauge; the /compact suggestion stays on the setting above.",
+      "default": 45
+    },
+    "divergeWarnPercent": {
+      "type": "number",
+      "title": "Divergence threshold %",
+      "description": "Where the divergence meter turns amber/red and the 'chat is diverging' suggestion appears (10-95).",
+      "default": 50
+    }
+  }
+}

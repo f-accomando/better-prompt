@@ -1,0 +1,6 @@
+{
+  "name": "better-prompt",
+  "description": "A Claude Code mod that sharpens weak prompts, tracks topic drift and shows context, 5h and 7d usage with an animated pixel crab.",
+  "owner": { "name": "Francesco Accomando" },
+  "plugins": [{ "name": "better-prompt", "source": "./" }]
+}
