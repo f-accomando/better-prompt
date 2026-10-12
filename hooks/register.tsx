@@ -167,9 +167,14 @@ export const register: Register = (on, options) => {
     const crew = (await read($, crewAtom)) ?? []
     const crabTotal = crew.length
     const hasTopics = t.names.length > 0 || t.trail.length > 0
-    if (e.props.hasSurvey || (s === null && g === null && !hasTopics && crabTotal === 0)) {
-      return next(e)
-    }
+    if (e.props.hasSurvey) return next(e)
+    const isAssisting = (await read($, enabled)) ?? assist
+    // Before the first judged prompt (or with assist off) the row says why it is empty.
+    const topicsText = hasTopics
+      ? topicsLine(t)
+      : isAssisting
+        ? 'topics 0 · counted from your next prompt'
+        : 'topics 0 · prompt assist off, /bp on to count'
 
     const ui = $.ui.resolve(e)
     const { Box, Text } = ui
@@ -244,21 +249,20 @@ export const register: Register = (on, options) => {
               ))}
           </Box>
         )}
-        {hasTopics &&
-          (Svg === null ? (
-            <Text color={LEVEL_COLOR[gaugeLevel(div, divWarn)]}>
-              {`div ${div}% ${gaugeBar(div, divWarn)} · topics ${topicCount(t)}`}
-            </Text>
-          ) : (
+        {Svg === null ? (
+          <Text color={LEVEL_COLOR[gaugeLevel(div, divWarn)]}>
+            {`div ${div}% ${gaugeBar(div, divWarn)} · ${topicsText}`}
+          </Text>
+        ) : (
             <Box gap={2} alignItems="flex-end">
               {meter(
                 'div',
                 { label: 'div', value: `${div}%`, percent: div, level: gaugeLevel(div, divWarn) },
                 `${div}%`,
               )}
-              <Text dimColor>{topicsLine(t)}</Text>
+              <Text dimColor>{topicsText}</Text>
             </Box>
-          ))}
+          )}
         {s !== null && (
           <Text dimColor>
             better-prompt: rewritten ({s.why}). Enter to send.
