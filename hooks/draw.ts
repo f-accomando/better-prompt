@@ -9,7 +9,18 @@ const INK = '#1F1E1D'
 export type Mood = 'up' | 'down' | 'flat'
 /** A crab's face and pose: the context moods plus 'sleep' (closed eyes, slow bob, floating z, still legs). */
 export type CrabMood = Mood | 'sleep'
-export type Accessory = 'magnifier' | 'cap' | 'glasses' | 'helmet' | 'crown' | 'clipboard' | 'none'
+export type Accessory =
+  | 'magnifier'
+  | 'cap'
+  | 'glasses'
+  | 'helmet'
+  | 'crown'
+  | 'clipboard'
+  | 'headphones'
+  | 'hardhat'
+  | 'mortarboard'
+  | 'miner'
+  | 'none'
 export type CrabOptions = { color?: string; accessory?: Accessory }
 
 export const BLUE = '#5B8DEF'
@@ -38,6 +49,12 @@ const TYPE_COLOR: Record<string, string> = {
   'savvy-fable': PINK,
   'claude-code-guide': SKY,
   'statusline-setup': GREY,
+  'bm-research': BLUE,
+  'bm-planner': TEAL,
+  'bm-coder': PINK,
+  'bm-mechanic': AMBER,
+  'bm-light': GREEN,
+  'bm-deep': PURPLE,
 }
 
 const TYPE_ACCESSORY: Record<string, Accessory> = {
@@ -49,6 +66,13 @@ const TYPE_ACCESSORY: Record<string, Accessory> = {
   'savvy-heavy': 'helmet',
   'savvy-fable': 'crown',
   plan: 'clipboard',
+  // the bm repo's agents: research = magnifier, planner = clipboard, the others have their own prop
+  'bm-research': 'magnifier',
+  'bm-planner': 'clipboard',
+  'bm-coder': 'headphones',
+  'bm-mechanic': 'hardhat',
+  'bm-light': 'mortarboard',
+  'bm-deep': 'miner',
 }
 
 /** The agent type without its plugin prefix: `savvy-flow:savvy-medium` -> `savvy-medium`. */
@@ -162,6 +186,14 @@ function accessorySvg(a: Accessory): string {
         px(0, 8, 5, 6, '#B07A3A') + px(1, 9, 3, 4, '#F4F1EA') + px(1, 7, 3, 1, '#6B6F76') +
         px(1, 10, 3, 1, '#8E929A') + px(1, 12, 3, 1, '#8E929A')
       )
+    case 'headphones': // band over the head, an ear cup each side
+      return px(8, 8, 14, 1, '#3A3A3C') + px(7, 8, 1, 7, '#3A3A3C') + px(22, 8, 1, 7, '#3A3A3C') + px(5, 11, 3, 5, '#C2569B') + px(22, 11, 3, 5, '#C2569B')
+    case 'hardhat': // yellow dome, a lighter ridge, a darker brim
+      return px(10, 6, 10, 1, '#F5C542') + px(8, 7, 14, 2, '#F5C542') + px(14, 6, 2, 3, '#FBE08A') + px(7, 9, 16, 1, '#C99A1E')
+    case 'mortarboard': // flat black board, a cap under it, a gold tassel
+      return px(6, 5, 18, 2, '#2B2B2B') + px(10, 7, 10, 2, '#2B2B2B') + px(23, 6, 1, 5, '#F5C542') + px(22, 10, 3, 2, '#F5C542')
+    case 'miner': // helmet with a lamp on the front
+      return px(10, 6, 10, 1, '#B5683A') + px(8, 7, 14, 2, '#A0522D') + px(7, 9, 16, 1, '#6B3A1E') + px(13, 4, 4, 3, '#FFE066') + px(14, 3, 2, 1, '#FFF3B0')
     default:
       return ''
   }

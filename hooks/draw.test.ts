@@ -112,10 +112,16 @@ test('accessory by role', () => {
   expect(accessoryFor('savvy-flow:savvy-heavy')).toBe('helmet')
   expect(accessoryFor('savvy-flow:savvy-fable')).toBe('crown')
   expect(accessoryFor('Plan')).toBe('clipboard')
+  expect(accessoryFor('bm-research')).toBe('magnifier')
+  expect(accessoryFor('bm-planner')).toBe('clipboard')
+  expect(accessoryFor('bm-coder')).toBe('headphones')
+  expect(accessoryFor('bm-mechanic')).toBe('hardhat')
+  expect(accessoryFor('bm-light')).toBe('mortarboard')
+  expect(accessoryFor('bm-deep')).toBe('miner')
   expect(accessoryFor('general-purpose')).toBe('none')
   expect(accessoryFor('unknown')).toBe('none')
   // every accessory stays inside the 30x28 grid
-  for (const a of ['magnifier', 'cap', 'glasses', 'helmet', 'crown', 'clipboard'] as const) {
+  for (const a of ['magnifier', 'cap', 'glasses', 'helmet', 'crown', 'clipboard', 'headphones', 'hardhat', 'mortarboard', 'miner'] as const) {
     const s = crab(0, 0, 1, 'up', { accessory: a })
     for (const r of s.matchAll(/<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)"/g)) {
       expect(Number(r[1]) + Number(r[3]) <= 30).toBe(true)
