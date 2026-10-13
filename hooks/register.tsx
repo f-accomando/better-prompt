@@ -3,7 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { CrewMember, Gauge, Limits } from '../types'
 import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
-import { crewAlt, crewSize, crewSvg, meterSize, meterSvg, type Meter } from './draw'
+import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, CTX_H, type Meter } from './draw'
+import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, isFinished, parsePlan, planAsk, planLine, type Plan } from './plan'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
   adviceRows,
@@ -21,10 +22,14 @@ const gauge = atom({ plugin: 'better-prompt', key: 'gauge' } as const, null)
 const limits = atom({ plugin: 'better-prompt', key: 'limits' } as const, null)
 const topicsAtom = atom({ plugin: 'better-prompt', key: 'topics' } as const, emptyTopics())
 const judged = atom({ plugin: 'better-prompt', key: 'judged' } as const, 0)
+const planAtom = atom({ plugin: 'better-prompt', key: 'plan' } as const, null as Plan | null)
 const crewAtom = atom({ plugin: 'better-prompt', key: 'crew' } as const, [] as CrewMember[])
 
 // Statuses that keep a crab in the strip; the engine drops finished agents itself after a few seconds.
 const CREW_STATUSES = ['pending', 'running', 'waiting', 'idle', 'completed', 'failed', 'killed']
+
+// Pixels of the two terminal cells between band items (gap={2}); tune if the bar ends short of or past 7d.
+const CELL_GAP_PX = 16
 
 const LEVEL_COLOR = { ok: 'green', near: 'yellow', over: 'red' } as const
 
@@ -75,6 +80,39 @@ async function classify($: EngineInterface, model: string) {
   }
 }
 
+// Task bar, step 1: when a prompt is sent, list its points. Runs beside the prompt and never holds it.
+async function makePlan($: EngineInterface, model: string, text: string) {
+  if (isSkippable(text)) return
+  const r = await $.model.complete({
+    model,
+    system: PLAN_SYSTEM,
+    prompt: planAsk(text),
+    effort: 'low',
+    maxTokens: 300,
+    timeoutMs: 10000,
+  })
+  const plan = r.isAnswered ? parsePlan(r.text) : null
+  await update($, planAtom, () => plan)
+}
+
+// Task bar, step 2: after a turn, tick the points the agent's last report shows as finished.
+async function advancePlan($: EngineInterface, model: string) {
+  const plan = await read($, planAtom)
+  if (plan == null || isFinished(plan)) return
+  const last = (await $.session.messages()).filter(m => m.role === 'assistant').pop()
+  if (last === undefined || last.text.trim().length === 0) return
+  const r = await $.model.complete({
+    model,
+    system: DONE_SYSTEM,
+    prompt: doneAsk(plan, last.text),
+    effort: 'low',
+    maxTokens: 100,
+    timeoutMs: 10000,
+  })
+  if (!r.isAnswered) return
+  await update($, planAtom, p => (p == null ? p : applyDone(p, r.text)))
+}
+
 export const register: Register = (on, options) => {
   const model = typeof options.model === 'string' ? options.model : 'haiku'
   const warnAt = Number(options.sizeWarnPercent ?? 60)
@@ -98,10 +136,17 @@ export const register: Register = (on, options) => {
     return r
   })
 
+  on('prompt.submit', async ($, e, next) => {
+    void makePlan($, model, e.text).catch(() => undefined)
+
+    return next(e)
+  })
+
   on('turn.complete', async ($, e, next) => {
     await refresh($).catch(() => undefined)
     const result = await next(e)
     await classify($, model).catch(() => undefined)
+    await advancePlan($, model).catch(() => undefined)
 
     return result
   })
@@ -149,25 +194,33 @@ export const register: Register = (on, options) => {
           height={meterSize(m).height}
         />
       )
-    const ctxMeter = (c: Gauge) =>
-      meter(
-        'ctx',
-        {
-          label: 'ctx',
-          value: ctxValue(c),
-          percent: c.percent,
-          level: gaugeLevel(c.percent, gaugeAt),
-          mark: gaugeAt,
-          hasCrab: true,
-        },
-        `${c.percent}%`,
-      )
+    const ctxSpec = (c: Gauge): Meter => ({
+      label: 'ctx',
+      value: ctxValue(c),
+      percent: c.percent,
+      level: gaugeLevel(c.percent, gaugeAt),
+      mark: gaugeAt,
+      hasCrab: true,
+    })
+    const limitSpec = (label: string, percent: number): Meter => ({
+      label,
+      value: `${percent}%`,
+      percent,
+      level: gaugeLevel(percent, 90),
+    })
+    const ctxMeter = (c: Gauge) => meter('ctx', ctxSpec(c), `${c.percent}%`)
     const limitMeter = (key: string, label: string, percent: number) =>
-      meter(
-        key,
-        { label, value: `${percent}%`, percent, level: gaugeLevel(percent, 90) },
-        `${percent}%`,
-      )
+      meter(key, limitSpec(label, percent), `${percent}%`)
+    // The task bar spans from the start of the first meter to the end of the last: their widths plus the 2-cell gaps.
+    const meters: Meter[] = [
+      ...(g !== null ? [ctxSpec(g)] : []),
+      ...(lim?.five != null ? [limitSpec('5h', lim.five)] : []),
+      ...(lim?.seven != null ? [limitSpec('7d', lim.seven)] : []),
+    ]
+    const planWidth =
+      meters.reduce((sum, m) => sum + meterSize(m).width, 0) + Math.max(0, meters.length - 1) * CELL_GAP_PX
+    const plan = await read($, planAtom)
+    const showPlan = Svg !== null && plan != null && meters.length > 0
 
     return (
       <Box flexDirection="column">
@@ -191,6 +244,22 @@ export const register: Register = (on, options) => {
               ))}
           </Box>
         )}
+        {showPlan && plan != null && Svg !== null && (
+          <Box flexDirection="column">
+            <Svg
+              source={planBarSvg(plan.steps, planWidth)}
+              alt={planLine(plan)}
+              width={planWidth}
+              height={CTX_H}
+            />
+            <Svg
+              source={adviceSvg(planLine(plan), 'dim')}
+              alt={planLine(plan)}
+              width={adviceSize(planLine(plan)).width}
+              height={adviceSize(planLine(plan)).height}
+            />
+          </Box>
+        )}
         {Svg === null ? (
           <Text color={LEVEL_COLOR[gaugeLevel(div, divWarn)]}>
             {`div ${div}% ${gaugeBar(div, divWarn)} · ${topicsText}`}
@@ -209,7 +278,15 @@ export const register: Register = (on, options) => {
             )
           )}
         {rows.map(r =>
-          r.tone === 'amber' ? (
+          Svg !== null ? (
+            <Svg
+              key={r.kind}
+              source={adviceSvg(r.text, r.tone)}
+              alt={r.text}
+              width={adviceSize(r.text).width}
+              height={adviceSize(r.text).height}
+            />
+          ) : r.tone === 'amber' ? (
             <Text key={r.kind} color="yellow">
               {r.text}
             </Text>

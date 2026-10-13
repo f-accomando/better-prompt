@@ -13,6 +13,7 @@ animated pixel crab on the bar.
   - One crab per running subagent. Colour follows the agent type, an accessory follows its role (magnifier for
     Explore, cap for light, glasses for careful, helmet for deep, crown for fable, clipboard for plan) and the mood
     follows its status: walking, asleep, happy when done, worried on failure.
+  - Task bar under the meters, as wide as ctx to 7d: when a prompt asks for work with 2 to 6 points, one segment per point (own colour when done, blinking amber for the current one, grey for the rest). The points come from the cheap model; they are ticked after each turn from the agent's last report.
   - `div` meter and `topics N` list: how many different topics the chat has taken on and how far it diverges.
 - **Topic counting**: after each turn a cheap model reads your earlier prompts and the last one and labels it
   same, related or new. Prompts are never rewritten, blocked or delayed.

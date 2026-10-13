@@ -141,8 +141,8 @@ const CSS = `<style>
 .patrol{animation:pt 4s ease-in-out infinite alternate}@keyframes pt{0%{transform:translateX(-${PATROL}px)}100%{transform:translateX(${PATROL}px)}}
 .zz g{transform-box:fill-box}.zz .sb{animation:sb 2.4s ease-in-out infinite}@keyframes sb{50%{transform:translateY(1px)}}
 .zf{animation:zf 2.4s ease-out infinite}@keyframes zf{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(-4px);opacity:0}}
-.t{fill:#1f1f1f}.s{fill:#6b6b68}
-@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}}
+.t{fill:#1f1f1f}.s{fill:#6b6b68}.a{fill:#a15c00}
+@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.a{fill:#e8b04a}}
 @media (prefers-reduced-motion: reduce){.run .la,.run .lb,.run .bd,.wave,.tw,.tw2,.drop,.zz .sb,.zf,.patrol{animation:none!important}}
 </style>`
 
@@ -304,6 +304,42 @@ export function meterSvg(m: Meter): string {
         ? `<text class="s" x="${METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP + Math.ceil(m.value.length * 6.6) + 2 + NOTE_GAP}" y="${base}" font-size="11">${xmlText(m.note)}</text>`
         : ''),
   )
+}
+
+const DONE_COLORS = [GREEN, TEAL, BLUE, SKY, PURPLE, PINK] as const
+const PLAN_GAP = 3
+
+/**
+ * The task bar, drawn in an SVG as tall as a meter with the bar on the same row and thickness as theirs:
+ * one segment per step across `width`. Done steps each take their own colour from the palette,
+ * the step in progress blinks amber, the rest are grey.
+ */
+export function planBarSvg(steps: readonly { done: boolean }[], width: number): string {
+  const n = steps.length
+  const w = (width - PLAN_GAP * (n - 1)) / n
+  const cur = steps.findIndex(s => !s.done)
+  const body = steps
+    .map((s, i) => {
+      const x = Math.round(i * (w + PLAN_GAP) * 10) / 10
+      const fill = s.done ? DONE_COLORS[i % DONE_COLORS.length] : i === cur ? AMBER : '#888'
+      const opacity = s.done || i === cur ? '' : ' fill-opacity="0.3"'
+      const cls = i === cur ? ' class="tw"' : ''
+      return `<rect${cls} x="${x}" y="${CTX_BAR_Y}" width="${Math.round(w * 10) / 10}" height="${CTX_BAR_H}" rx="4" fill="${fill}"${opacity}/>`
+    })
+    .join('')
+  return svg(width, CTX_H, body)
+}
+
+const ADVICE_H = 14
+
+export function adviceSize(text: string): { width: number; height: number } {
+  return { width: Math.ceil(text.length * 6.2) + 2, height: ADVICE_H }
+}
+
+/** A suggestion line at the same 11px size as the meter notes, amber or dim. */
+export function adviceSvg(text: string, tone: 'amber' | 'dim'): string {
+  const { width, height } = adviceSize(text)
+  return svg(width, height, `<text class="${tone === 'amber' ? 'a' : 's'}" x="0" y="11" font-size="11">${xmlText(text)}</text>`)
 }
 
 /** How many crabs the subagent strip draws. */
