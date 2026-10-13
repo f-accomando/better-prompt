@@ -61,3 +61,7 @@ your last 30 prompts.
 `claude plugin validate .` and `claude plugin test .` from the repository folder. The hooks are in
 `hooks/register.tsx`, the SVG drawing in `hooks/draw.ts`, the topic logic in `hooks/topics.ts`, the classifier prompt in
 `hooks/judge.ts`. The crab sprite follows [crab-ledger](https://github.com/f-accomando/crab-ledger).
+
+## License
+
+MIT, see [LICENSE](LICENSE).

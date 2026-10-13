@@ -35,5 +35,6 @@
       "description": "Where the divergence meter turns amber/red and the 'chat is diverging' suggestion appears (10-95).",
       "default": 50
     }
-  }
+  },
+  "license": "MIT"
 }
