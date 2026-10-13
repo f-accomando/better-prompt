@@ -1,33 +1,21 @@
 {
   "name": "better-prompt",
-  "version": "0.1.0",
-  "description": "Sharpens weak prompts, tracks topic drift, and shows context, 5h and 7d usage with an animated pixel crab.",
+  "version": "0.2.0",
+  "description": "Shows context, 5h and 7d usage with an animated pixel crab, one crab per subagent, and counts topics and divergence.",
   "author": {
     "name": "Francesco Accomando"
   },
   "types": "./types/index.d.ts",
   "userConfig": {
-    "promptAssist": {
-      "type": "boolean",
-      "title": "Prompt assist",
-      "description": "Judge each prompt before it is sent: rewrite weak ones (blocking the send until you confirm) and flag topic changes. Off leaves prompts untouched; the context band stays. Toggle in session with /bp on|off.",
-      "default": true
-    },
     "model": {
       "type": "string",
-      "title": "Judge model",
-      "description": "Model that judges and rewrites prompts (a cheap one is enough).",
+      "title": "Topic model",
+      "description": "Model that classifies each prompt to count topics and divergence (a cheap one is enough).",
       "options": [
         "haiku",
         "sonnet"
       ],
       "default": "haiku"
-    },
-    "autoRewrite": {
-      "type": "boolean",
-      "title": "Rewrite weak prompts",
-      "description": "With prompt assist on: put an improved version in the prompt box instead of sending a weak prompt. Off keeps only the topic-change advice.",
-      "default": true
     },
     "sizeWarnPercent": {
       "type": "number",

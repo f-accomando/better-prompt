@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { CrewMember, Gauge, Limits, Suggestion } from '../types'
+import type { CrewMember, Gauge, Limits } from '../types'
 import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
 import { crewAlt, crewSize, crewSvg, meterSize, meterSvg, type Meter } from './draw'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
@@ -17,11 +17,10 @@ import {
   topicsLine,
 } from './topics'
 
-const suggestion = atom({ plugin: 'better-prompt', key: 'suggestion' } as const, null)
-const enabled = atom({ plugin: 'better-prompt', key: 'enabled' } as const, null)
 const gauge = atom({ plugin: 'better-prompt', key: 'gauge' } as const, null)
 const limits = atom({ plugin: 'better-prompt', key: 'limits' } as const, null)
 const topicsAtom = atom({ plugin: 'better-prompt', key: 'topics' } as const, emptyTopics())
+const judged = atom({ plugin: 'better-prompt', key: 'judged' } as const, 0)
 const crewAtom = atom({ plugin: 'better-prompt', key: 'crew' } as const, [] as CrewMember[])
 
 // Statuses that keep a crab in the strip; the engine drops finished agents itself after a few seconds.
@@ -48,46 +47,45 @@ async function refresh($: EngineInterface) {
   await update($, crewAtom, () => crew)
 }
 
+// Counts topics only: classifies the newest prompt of the main conversation after the turn. Never touches a prompt.
+async function classify($: EngineInterface, model: string) {
+  const turns = (await $.session.messages())
+    .filter(m => m.role === 'user' && (m.toolResults ?? []).length === 0)
+    .map(m => m.text)
+  const seen = (await read($, judged)) ?? 0
+  await update($, judged, () => turns.length)
+  if (turns.length <= seen) return
+  const text = turns[turns.length - 1]
+  if (isSkippable(text)) return
+  const r = await $.model.complete({
+    model,
+    system: SYSTEM,
+    prompt: askText(turns.slice(0, -1), text),
+    effort: 'low',
+    maxTokens: 300,
+    timeoutMs: 10000,
+  })
+  const verdict = r.isAnswered ? parseVerdict(r.text) : null
+  if (verdict === null) return
+  await update($, topicsAtom, t =>
+    recordVerdict(turns.length === 1 ? reset() : (t ?? emptyTopics()), verdict),
+  )
+  if (verdict.thread === 'new' && turns.length >= 2) {
+    $.ui.toast(`New topic (${verdict.topic}): see the band above the prompt`)
+  }
+}
+
 export const register: Register = (on, options) => {
   const model = typeof options.model === 'string' ? options.model : 'haiku'
   const warnAt = Number(options.sizeWarnPercent ?? 60)
   const gaugeAt = clampGauge(options.gaugeWarnPercent, 45)
   const divWarn = clampGauge(options.divergeWarnPercent, 50)
-  const assist = options.promptAssist !== false
-  const autoRewrite = options.autoRewrite !== false
 
   on('agent.spawn', async ($, e, next) => {
     const result = await next(e)
     await refresh($).catch(() => undefined)
 
     return result
-  })
-
-  on('session.start', async ($, e, next) => {
-    await $.command.register({
-      name: 'bp',
-      description: 'better-prompt: on | off | status',
-      argumentHint: 'on|off|status',
-    })
-
-    return next(e)
-  })
-
-  on('command.run', { command: 'bp' }, async ($, e) => {
-    const arg = e.args.trim()
-    if (arg === 'on' || arg === 'off') {
-      await update($, enabled, () => arg === 'on')
-      if (arg === 'off') await update($, suggestion, () => null)
-    }
-    const now = (await read($, enabled)) ?? assist
-    const t = (await read($, topicsAtom)) ?? emptyTopics()
-    const counts = `topics ${topicCount(t)}, divergence ${divergence(t)}%`
-
-    return {
-      text: now
-        ? `prompt assist on: weak prompts are rewritten, topic changes flagged. Start a prompt with ! to send it untouched. ${counts}.`
-        : `prompt assist off: prompts go through untouched. The context band stays. ${counts}.`,
-    }
   })
 
   // Observes only: after a real compaction of the main conversation, keep just the current topic.
@@ -100,81 +98,25 @@ export const register: Register = (on, options) => {
     return r
   })
 
-  on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind !== 'composer') return next(e)
-
-    if (!((await read($, enabled)) ?? assist)) return next(e)
-
-    if (e.text.startsWith('!')) {
-      return next({ ...e, text: e.text.slice(1).trimStart() })
-    }
-
-    const pending = await read($, suggestion)
-    if (pending !== null && e.text.trim() === pending.rewrite) {
-      await update($, suggestion, () => null)
-      return next(e)
-    }
-
-    if (isSkippable(e.text) || e.attachments !== undefined) return next(e)
-
-    const turns = (await $.session.messages())
-      .filter(m => m.role === 'user' && (m.toolResults ?? []).length === 0)
-      .map(m => m.text)
-
-    const r = await $.model.complete({
-      model,
-      system: SYSTEM,
-      prompt: askText(turns, e.text),
-      effort: 'low',
-      maxTokens: 700,
-      timeoutMs: 10000,
-    })
-    const verdict = r.isAnswered ? parseVerdict(r.text) : null
-    if (verdict === null) return next(e)
-
-    // Recorded before the rewrite branch: a prompt dropped for a rewrite is not judged again when resent.
-    await update($, topicsAtom, t =>
-      recordVerdict(turns.length === 0 ? reset() : (t ?? emptyTopics()), verdict),
-    )
-
-    if (autoRewrite && verdict.isWeak && verdict.rewrite !== e.text.trim()) {
-      const s: Suggestion = { rewrite: verdict.rewrite, why: verdict.why }
-      await update($, suggestion, () => s)
-      await $.prompt.fill({ text: verdict.rewrite, mode: 'replace' })
-
-      return {
-        drop: `better-prompt: ${verdict.why || 'sharper version'} in the box. Enter sends it; "!" + your original sends that.`,
-      }
-    }
-
-    if (verdict.thread === 'new' && turns.length >= 2) {
-      $.ui.toast(`New topic (${verdict.topic}): see the band above the prompt`)
-    }
-
-    return next(e)
-  }).catch(($, e, next) => next(e))
-
   on('turn.complete', async ($, e, next) => {
     await refresh($).catch(() => undefined)
+    const result = await next(e)
+    await classify($, model).catch(() => undefined)
 
-    return next(e)
+    return result
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const s = await read($, suggestion)
     const g = await read($, gauge)
     const t = (await read($, topicsAtom)) ?? emptyTopics()
     const crew = (await read($, crewAtom)) ?? []
     const crabTotal = crew.length
     const hasTopics = t.names.length > 0 || t.trail.length > 0
     if (e.props.hasSurvey) return next(e)
-    const isAssisting = (await read($, enabled)) ?? assist
-    // Before the first judged prompt (or with assist off) the row says why it is empty.
+    // Before the first classified prompt the row says why it is empty.
     const topicsText = hasTopics
       ? topicsLine(t)
-      : isAssisting
-        ? 'topics 0 · counted from your next prompt'
-        : 'topics 0 · prompt assist off, /bp on to count'
+      : 'topics 0 · counted from your next prompt'
 
     const ui = $.ui.resolve(e)
     const { Box, Text } = ui
@@ -266,11 +208,6 @@ export const register: Register = (on, options) => {
               `${div}%`,
             )
           )}
-        {s !== null && (
-          <Text dimColor>
-            better-prompt: rewritten ({s.why}). Enter to send.
-          </Text>
-        )}
         {rows.map(r =>
           r.tone === 'amber' ? (
             <Text key={r.kind} color="yellow">

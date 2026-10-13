@@ -7,13 +7,10 @@ export type Verdict = {
 }
 
 export const SYSTEM = [
-  'You review the next prompt a developer is about to send to a coding agent.',
-  'You get a brief of the session so far (their earlier prompts, oldest first) and the new prompt.',
+  'You classify the next prompt a developer sent to a coding agent against the session so far.',
+  'You get a brief of the session (their earlier prompts, oldest first) and the new prompt.',
   'Reply with ONE JSON object and nothing else:',
-  '{"quality":"good"|"weak","rewrite":string,"why":string,"thread":"same"|"related"|"new","topic":string}',
-  'quality=weak only when the prompt is vague, lacks the file/symbol/goal that earlier prompts already imply, or would make the agent explore blindly.',
-  'rewrite: the same request, same language as the prompt, made specific using the session brief (files, goal, constraints, what not to touch). Never invent facts. Empty string when quality=good.',
-  'why: under 12 words, what the rewrite fixes.',
+  '{"thread":"same"|"related"|"new","topic":string}',
   'thread: same = continues the current work; related = same project area but a new step; new = unrelated to the recent work.',
   'topic: 3-6 words naming what the new prompt is about.',
 ].join('\n')
