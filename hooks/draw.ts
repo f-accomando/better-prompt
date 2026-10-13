@@ -310,24 +310,25 @@ const DONE_COLORS = [GREEN, TEAL, BLUE, SKY, PURPLE, PINK] as const
 const PLAN_GAP = 3
 
 /**
- * The task bar, drawn in an SVG as tall as a meter with the bar on the same row and thickness as theirs:
- * one segment per step across `width`. Done steps each take their own colour from the palette,
- * the step in progress blinks amber, the rest are grey.
+ * The task bar, in an SVG as tall as a meter: `label` (done/total) in the label column, then one segment per step
+ * from where the other bars start to `width`. Done steps each take their own colour, the step in progress is amber,
+ * the rest are grey.
  */
-export function planBarSvg(steps: readonly { done: boolean }[], width: number): string {
+export function planBarSvg(steps: readonly { done: boolean }[], label: string, width: number): string {
   const n = steps.length
-  const w = (width - PLAN_GAP * (n - 1)) / n
+  const barW = width - METER_LABEL_W
+  const w = (barW - PLAN_GAP * (n - 1)) / n
   const cur = steps.findIndex(s => !s.done)
-  const body = steps
+  const base = CTX_BAR_Y + CTX_BAR_H - 0.5
+  const segs = steps
     .map((s, i) => {
-      const x = Math.round(i * (w + PLAN_GAP) * 10) / 10
+      const x = Math.round((METER_LABEL_W + i * (w + PLAN_GAP)) * 10) / 10
       const fill = s.done ? DONE_COLORS[i % DONE_COLORS.length] : i === cur ? AMBER : '#888'
       const opacity = s.done || i === cur ? '' : ' fill-opacity="0.3"'
-      const cls = i === cur ? ' class="tw"' : ''
-      return `<rect${cls} x="${x}" y="${CTX_BAR_Y}" width="${Math.round(w * 10) / 10}" height="${CTX_BAR_H}" rx="4" fill="${fill}"${opacity}/>`
+      return `<rect x="${x}" y="${CTX_BAR_Y}" width="${Math.round(w * 10) / 10}" height="${CTX_BAR_H}" rx="4" fill="${fill}"${opacity}/>`
     })
     .join('')
-  return svg(width, CTX_H, body)
+  return svg(width, CTX_H, `<text class="s" x="0" y="${base}" font-size="11">${xmlText(label)}</text>${segs}`)
 }
 
 const ADVICE_H = 14

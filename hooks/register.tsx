@@ -3,8 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { CrewMember, Gauge, Limits } from '../types'
 import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
-import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, CTX_H, type Meter } from './draw'
-import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, isFinished, parsePlan, planAsk, planLine, type Plan } from './plan'
+import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
+import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, type Plan } from './plan'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
   adviceRows,
@@ -211,14 +211,17 @@ export const register: Register = (on, options) => {
     const ctxMeter = (c: Gauge) => meter('ctx', ctxSpec(c), `${c.percent}%`)
     const limitMeter = (key: string, label: string, percent: number) =>
       meter(key, limitSpec(label, percent), `${percent}%`)
-    // The task bar spans from the start of the first meter to the end of the last: their widths plus the 2-cell gaps.
+    // The task bar starts where the first bar starts and ends where the last bar ends (not at its value text).
     const meters: Meter[] = [
       ...(g !== null ? [ctxSpec(g)] : []),
       ...(lim?.five != null ? [limitSpec('5h', lim.five)] : []),
       ...(lim?.seven != null ? [limitSpec('7d', lim.seven)] : []),
     ]
+    const lastMeter = meters[meters.length - 1]
     const planWidth =
-      meters.reduce((sum, m) => sum + meterSize(m).width, 0) + Math.max(0, meters.length - 1) * CELL_GAP_PX
+      meters.reduce((sum, m) => sum + meterSize(m).width, 0) +
+      Math.max(0, meters.length - 1) * CELL_GAP_PX -
+      (lastMeter === undefined ? 0 : meterSize(lastMeter).width - METER_LABEL_W - METER_BAR_W)
     const plan = await read($, planAtom)
     const showPlan = Svg !== null && plan != null && meters.length > 0
 
@@ -245,20 +248,12 @@ export const register: Register = (on, options) => {
           </Box>
         )}
         {showPlan && plan != null && Svg !== null && (
-          <Box flexDirection="column">
-            <Svg
-              source={planBarSvg(plan.steps, planWidth)}
-              alt={planLine(plan)}
-              width={planWidth}
-              height={CTX_H}
-            />
-            <Svg
-              source={adviceSvg(planLine(plan), 'dim')}
-              alt={planLine(plan)}
-              width={adviceSize(planLine(plan)).width}
-              height={adviceSize(planLine(plan)).height}
-            />
-          </Box>
+          <Svg
+            source={planBarSvg(plan.steps, `${doneCount(plan)}/${plan.steps.length}`, planWidth)}
+            alt={planLine(plan)}
+            width={planWidth}
+            height={CTX_H}
+          />
         )}
         {Svg === null ? (
           <Text color={LEVEL_COLOR[gaugeLevel(div, divWarn)]}>

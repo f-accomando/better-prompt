@@ -28,8 +28,9 @@ test('planLine shows count and the current step', () => {
 })
 
 test('planBarSvg draws one segment per step across the width', () => {
-  const svg = planBarSvg([{ done: true }, { done: false }, { done: false }], 300)
+  const svg = planBarSvg([{ done: true }, { done: false }, { done: false }], '1/3', 300)
   expect((svg.match(/<rect/g) ?? []).length).toBe(3)
   expect(svg).toContain('width="300"')
-  expect(svg).toContain('class="tw"')
+  expect(svg).toContain('>1/3<')
+  expect(svg).not.toContain('class="tw"')
 })
