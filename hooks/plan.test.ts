@@ -1,6 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 
-import { applyDone, currentStep, isFinished, parsePlan, planLine } from './plan'
+import { applyDone, currentStep, isFinished, parsePlan, planLine, planValue } from './plan'
 import { planBarSvg } from './draw'
 
 const raw = '{"title":"Add login","steps":["write form","hook api","add tests"]}'
@@ -27,10 +27,22 @@ test('planLine shows count and the current step', () => {
   expect(planLine(a)).toBe('Add login 1/3 · hook api')
 })
 
-test('planBarSvg draws one segment per step across the width', () => {
-  const svg = planBarSvg([{ done: true }, { done: false }, { done: false }], '1/3', 300)
-  expect((svg.match(/<rect/g) ?? []).length).toBe(3)
-  expect(svg).toContain('width="300"')
-  expect(svg).toContain('>1/3<')
+test('planValue is done over total as a percentage', () => {
+  const a = applyDone(parsePlan(raw)!, '{"done":[1]}')
+  expect(planValue(a)).toBe('33%')
+  expect(planValue(applyDone(a, '{"done":[2,3]}'))).toBe('100%')
+})
+
+test('planBarSvg packs done steps from the left, each in its own colour, with an amber stub while open', () => {
+  const svg = planBarSvg([{ done: true }, { done: true }, { done: false }], '2/3', 300, '67%')
+  expect(svg).toContain('clip-path')
+  expect(svg).toContain('>2/3<')
+  expect(svg).toContain('>67%<')
+  expect((svg.match(/<rect[^>]*fill="#[0-9A-Fa-f]{6}"\/>/g) ?? []).length).toBe(3)
   expect(svg).not.toContain('class="tw"')
+})
+
+test('planBarSvg packs done steps left even when an earlier step is open', () => {
+  const svg = planBarSvg([{ done: false }, { done: true }, { done: false }], '1/3', 300, '33%')
+  expect(svg).toContain('<rect x="26"')
 })

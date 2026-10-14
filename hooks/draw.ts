@@ -280,6 +280,10 @@ export type Meter = {
   level: Level
   mark?: number
   hasCrab?: boolean
+  /** Font size of the label when 'topic' needs to fit the label column; default 11. */
+  labelSize?: number
+  /** Pads the SVG to at least this width, so the next item starts where the same item of another row does. */
+  padTo?: number
   /** Dim text after the value, drawn on the same baseline (e.g. the topic names). */
   note?: string
 }
@@ -287,7 +291,10 @@ export type Meter = {
 export function meterSize(m: Meter): { width: number; height: number } {
   const valueW = Math.ceil(m.value.length * 6.6) + 2
   const noteW = m.note ? NOTE_GAP + Math.ceil(m.note.length * 6.2) : 0
-  return { width: METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP + valueW + noteW, height: CTX_H }
+  return {
+    width: Math.max(m.padTo ?? 0, METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP + valueW + noteW),
+    height: CTX_H,
+  }
 }
 
 /** One band item: label, bar (crab optional) and value in a single SVG, so every meter shares one baseline. */
@@ -297,7 +304,9 @@ export function meterSvg(m: Meter): string {
   return svg(
     width,
     height,
-    `<text class="s" x="0" y="${base}" font-size="11">${m.label}</text>` +
+    (m.labelSize === undefined
+      ? `<text class="s" x="0" y="${base}" font-size="11">${m.label}</text>`
+      : `<text class="s" x="0" y="${CTX_BAR_Y + CTX_BAR_H / 2}" dominant-baseline="central" font-size="${m.labelSize}">${m.label}</text>`) +
       `<g transform="translate(${METER_LABEL_W},0)">${barBody(m.percent, m.level, m.mark, METER_BAR_W, m.hasCrab === true)}</g>` +
       `<text class="t" x="${METER_LABEL_W + METER_BAR_W + METER_VALUE_GAP}" y="${base}" font-size="11" font-weight="600">${m.value}</text>` +
       (m.note
@@ -307,28 +316,41 @@ export function meterSvg(m: Meter): string {
 }
 
 const DONE_COLORS = [GREEN, TEAL, BLUE, SKY, PURPLE, PINK] as const
-const PLAN_GAP = 3
 
 /**
- * The task bar, in an SVG as tall as a meter: `label` (done/total) in the label column, then one segment per step
- * from where the other bars start to `width`. Done steps each take their own colour, the step in progress is amber,
- * the rest are grey.
+ * The task bar, in an SVG as tall as a meter: `label` (done/total) in the label column, then one continuous track from
+ * where the other bars start to `width`, filled from the left by the done steps (packed together, each its own colour), plus a small amber stub for an open one.
+ * `value` (the total percentage) follows the last bar.
  */
-export function planBarSvg(steps: readonly { done: boolean }[], label: string, width: number): string {
+export function planSize(width: number, value: string): { width: number; height: number } {
+  return { width: width + METER_VALUE_GAP + Math.ceil(value.length * 6.6) + 2, height: CTX_H }
+}
+
+export function planBarSvg(steps: readonly { done: boolean }[], label: string, width: number, value: string): string {
   const n = steps.length
   const barW = width - METER_LABEL_W
-  const w = (barW - PLAN_GAP * (n - 1)) / n
-  const cur = steps.findIndex(s => !s.done)
+  const w = barW / n
   const base = CTX_BAR_Y + CTX_BAR_H - 0.5
-  const segs = steps
-    .map((s, i) => {
-      const x = Math.round((METER_LABEL_W + i * (w + PLAN_GAP)) * 10) / 10
-      const fill = s.done ? DONE_COLORS[i % DONE_COLORS.length] : i === cur ? AMBER : '#888'
-      const opacity = s.done || i === cur ? '' : ' fill-opacity="0.3"'
-      return `<rect x="${x}" y="${CTX_BAR_Y}" width="${Math.round(w * 10) / 10}" height="${CTX_BAR_H}" rx="4" fill="${fill}"${opacity}/>`
-    })
-    .join('')
-  return svg(width, CTX_H, `<text class="s" x="0" y="${base}" font-size="11">${xmlText(label)}</text>${segs}`)
+  const tracks = `<rect x="${METER_LABEL_W}" y="${CTX_BAR_Y}" width="${barW}" height="${CTX_BAR_H}" rx="4" fill="#888" fill-opacity="0.3"/>`
+  // Done steps fill from the left in the order they finished; an open step shows as a small amber stub after them.
+  const doneN = steps.filter(s => s.done).length
+  const parts = Array.from({ length: doneN }, (_, j) => {
+    const x = Math.round((METER_LABEL_W + j * w) * 10) / 10
+    const wj = Math.round((j === n - 1 ? w : w - 1) * 10) / 10
+    return `<rect x="${x}" y="${CTX_BAR_Y}" width="${wj}" height="${CTX_BAR_H}" fill="${DONE_COLORS[j % DONE_COLORS.length]}"/>`
+  }).join('')
+  const stubX = Math.round((METER_LABEL_W + doneN * w) * 10) / 10
+  const stub =
+    doneN < n
+      ? `<rect x="${stubX}" y="${CTX_BAR_Y}" width="${Math.round(Math.min(barW * 0.06, barW - doneN * w) * 10) / 10}" height="${CTX_BAR_H}" fill="${AMBER}"/>`
+      : ''
+  return svg(
+    planSize(width, value).width,
+    CTX_H,
+    `<defs><clipPath id="pc"><rect x="${METER_LABEL_W}" y="${CTX_BAR_Y}" width="${barW}" height="${CTX_BAR_H}" rx="4"/></clipPath></defs>` +
+      `<text class="s" x="0" y="${base}" font-size="11">${xmlText(label)}</text>${tracks}<g clip-path="url(#pc)">${parts}${stub}</g>` +
+      `<text class="t" x="${width + METER_VALUE_GAP}" y="${base}" font-size="11" font-weight="600">${xmlText(value)}</text>`,
+  )
 }
 
 const ADVICE_H = 14

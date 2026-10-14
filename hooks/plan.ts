@@ -79,3 +79,8 @@ export function planLine(plan: Plan): string {
   const head = `${plan.title.length > 0 ? plan.title : 'task'} ${doneCount(plan)}/${plan.steps.length}`
   return cur === -1 ? `${head} · done` : `${head} · ${plan.steps[cur].text}`
 }
+
+/** Total progress as `50%`: done steps over all steps. */
+export function planValue(plan: Plan): string {
+  return `${Math.round((doneCount(plan) / Math.max(1, plan.steps.length)) * 100)}%`
+}

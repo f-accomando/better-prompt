@@ -3,8 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { CrewMember, Gauge, Limits } from '../types'
 import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
-import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
-import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, type Plan } from './plan'
+import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, planSize, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
+import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, planValue, type Plan } from './plan'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
   adviceRows,
@@ -15,7 +15,6 @@ import {
   reset,
   resetKeepLast,
   topicCount,
-  topicsLine,
 } from './topics'
 
 const gauge = atom({ plugin: 'better-prompt', key: 'gauge' } as const, null)
@@ -30,6 +29,9 @@ const CREW_STATUSES = ['pending', 'running', 'waiting', 'idle', 'completed', 'fa
 
 // Pixels of the two terminal cells between band items (gap={2}); tune if the bar ends short of or past 7d.
 const CELL_GAP_PX = 16
+
+const TOPIC_MAX = 5
+const TOPIC_WARN = 3
 
 const LEVEL_COLOR = { ok: 'green', near: 'yellow', over: 'red' } as const
 
@@ -156,12 +158,10 @@ export const register: Register = (on, options) => {
     const t = (await read($, topicsAtom)) ?? emptyTopics()
     const crew = (await read($, crewAtom)) ?? []
     const crabTotal = crew.length
-    const hasTopics = t.names.length > 0 || t.trail.length > 0
     if (e.props.hasSurvey) return next(e)
-    // Before the first classified prompt the row says why it is empty.
-    const topicsText = hasTopics
-      ? topicsLine(t)
-      : 'topics 0 · counted from your next prompt'
+    const topicN = topicCount(t)
+    // The topic bar runs 0-5 with its tick at 3, where the "chat is diverging" advice starts.
+    const topicPct = Math.min(100, (topicN / TOPIC_MAX) * 100)
 
     const ui = $.ui.resolve(e)
     const { Box, Text } = ui
@@ -249,29 +249,43 @@ export const register: Register = (on, options) => {
         )}
         {showPlan && plan != null && Svg !== null && (
           <Svg
-            source={planBarSvg(plan.steps, `${doneCount(plan)}/${plan.steps.length}`, planWidth)}
+            source={planBarSvg(plan.steps, `${doneCount(plan)}/${plan.steps.length}`, planWidth, planValue(plan))}
             alt={planLine(plan)}
-            width={planWidth}
+            width={planSize(planWidth, planValue(plan)).width}
             height={CTX_H}
           />
         )}
         {Svg === null ? (
           <Text color={LEVEL_COLOR[gaugeLevel(div, divWarn)]}>
-            {`div ${div}% ${gaugeBar(div, divWarn)} · ${topicsText}`}
+            {`div ${div}% ${gaugeBar(div, divWarn)} · topics ${topicN}`}
           </Text>
         ) : (
-            meter(
+          <Box gap={2} alignItems="flex-end">
+            {meter(
               'div',
               {
                 label: 'div',
                 value: `${div}%`,
                 percent: div,
                 level: gaugeLevel(div, divWarn),
-                note: topicsText,
+                padTo: g === null ? undefined : meterSize(ctxSpec(g)).width,
               },
               `${div}%`,
-            )
-          )}
+            )}
+            {meter(
+              'topic',
+              {
+                label: 'topic',
+                labelSize: 10,
+                value: String(topicN),
+                percent: topicPct,
+                level: gaugeLevel(topicPct, (TOPIC_WARN / TOPIC_MAX) * 100),
+                mark: (TOPIC_WARN / TOPIC_MAX) * 100,
+              },
+              String(topicN),
+            )}
+          </Box>
+        )}
         {rows.map(r =>
           Svg !== null ? (
             <Svg
