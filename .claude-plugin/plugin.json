@@ -1,6 +1,6 @@
 {
   "name": "better-prompt",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Shows context, 5h and 7d usage with an animated pixel crab, one crab per subagent, and counts topics and divergence.",
   "author": {
     "name": "Francesco Accomando"

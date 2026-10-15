@@ -5,6 +5,7 @@ import type { CrewMember, Gauge, Limits } from '../types'
 import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
 import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, planSize, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
 import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, planValue, type Plan } from './plan'
+import { STATE_PATH, buildState, stateText } from './state'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
   adviceRows,
@@ -115,6 +116,15 @@ async function advancePlan($: EngineInterface, model: string) {
   await update($, planAtom, p => (p == null ? p : applyDone(p, r.text)))
 }
 
+// Leaves the numbers for an outside hook (e.g. a UserPromptSubmit guard). Failures are swallowed by callers.
+async function exportState($: EngineInterface) {
+  const { context } = await $.session.usage()
+  const topics = (await read($, topicsAtom)) ?? emptyTopics()
+  const root = await $.session.root()
+  const text = stateText(buildState({ context, topics, now: new Date() }))
+  await $.fs.write(`${root}/${STATE_PATH}`, text)
+}
+
 export const register: Register = (on, options) => {
   const model = typeof options.model === 'string' ? options.model : 'haiku'
   const warnAt = Number(options.sizeWarnPercent ?? 60)
@@ -133,6 +143,7 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (!('skip' in r) && e.trigger !== 'precompute' && e.agentId === undefined) {
       await update($, topicsAtom, t => resetKeepLast(t ?? emptyTopics())).catch(() => undefined)
+      await exportState($).catch(() => undefined)
     }
 
     return r
@@ -149,6 +160,7 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     await classify($, model).catch(() => undefined)
     await advancePlan($, model).catch(() => undefined)
+    await exportState($).catch(() => undefined)
 
     return result
   })
