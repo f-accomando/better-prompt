@@ -40,6 +40,8 @@ Open them in the config menu (`/config`).
 | `model` | haiku | Model that classifies prompts to count topics (a cheap one is enough). |
 | `gaugeWarnPercent` | 45 | Where the context bar marks its limit (10-95); only colours the bar. |
 | `divergeWarnPercent` | 50 | Divergence level that colours the meter. |
+| `keepWarm` | off | While idle, ping the session every few minutes so the prompt cache never lapses. |
+| `keepWarmMinutes` | 4 | Minutes between pings (1-4; the cache lapses after 5). |
 
 ## How the numbers are made
 
@@ -69,6 +71,16 @@ The file is read-only input for other tools: the mod never reads it back. The en
 written in one `fs.write` of under 1 KB; a reader should treat unparsable JSON as "no data". Write errors are ignored and
 never delay a turn. Nothing runs `/compact`, `/clear` or `/rewind` automatically.
 
+## Keep warm
+
+With `keepWarm` on, every main-conversation turn (re)starts a timer. While the session is idle, each tick runs one
+`$.model.fork` with a one-character reply request: it reads the whole cached conversation back, which renews the
+cache entry, so the conversation never goes cold. The reply is dropped and nothing is added to the transcript.
+A ping is skipped while a turn runs (the turn keeps the cache warm itself) and the loop stops when there is nothing to
+fork (a new session, or right after `/clear`) until the next turn. There is no cap: it lasts as long as the session is
+open. Each ping bills the full context at the cache-read rate and counts toward your limits, so turn it off when you
+walk away for good.
+
 ## Costs
 
 Each prompt of 20 characters or more costs one small model call (haiku by default) over a brief of
@@ -77,7 +89,7 @@ your last 30 prompts.
 ## Develop
 
 `claude plugin validate .` and `claude plugin test .` from the repository folder. The hooks are in
-`hooks/register.tsx`, the SVG drawing in `hooks/draw.ts`, the topic logic in `hooks/topics.ts`, the state file in `hooks/state.ts`, the classifier prompt in
+`hooks/register.tsx`, the SVG drawing in `hooks/draw.ts`, the topic logic in `hooks/topics.ts`, the state file in `hooks/state.ts`, the keep-warm logic in `hooks/keepwarm.ts`, the classifier prompt in
 `hooks/judge.ts`. The crab sprite follows [crab-ledger](https://github.com/f-accomando/crab-ledger).
 
 ## License

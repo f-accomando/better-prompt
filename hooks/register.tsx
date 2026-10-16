@@ -6,6 +6,7 @@ import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
 import { crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, planSize, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
 import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, planValue, type Plan } from './plan'
 import { STATE_PATH, buildState, stateText } from './state'
+import { PING_PROMPT, clampKeepWarmMinutes, endsLoop, keepWarmEnabled, shouldPing } from './keepwarm'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
   divergence,
@@ -123,10 +124,38 @@ async function exportState($: EngineInterface) {
   await $.fs.write(`${root}/${STATE_PATH}`, text)
 }
 
+// Keep-warm loop state: one timer per session, restarted after every turn.
+let warmTimer: { cancel: () => void } | null = null
+let turnBusy = false
+let warmStopped = false
+
+// Reads the whole cached conversation back through a fork, which renews the cache entry; the reply is dropped.
+async function ping($: EngineInterface) {
+  if (!shouldPing({ busy: turnBusy, stopped: warmStopped })) return
+  const r = await $.model.fork({ prompt: PING_PROMPT })
+  if (endsLoop(r)) stopWarm()
+}
+
+function stopWarm() {
+  warmStopped = true
+  warmTimer?.cancel()
+  warmTimer = null
+}
+
+function startWarm($: EngineInterface, minutes: number) {
+  warmTimer?.cancel()
+  warmStopped = false
+  warmTimer = $.clock.every(minutes * 60_000, () => {
+    void ping($).catch(() => undefined)
+  })
+}
+
 export const register: Register = (on, options) => {
   const model = typeof options.model === 'string' ? options.model : 'haiku'
   const gaugeAt = clampGauge(options.gaugeWarnPercent, 45)
   const divWarn = clampGauge(options.divergeWarnPercent, 50)
+  const keepWarm = keepWarmEnabled(options.keepWarm)
+  const warmMinutes = clampKeepWarmMinutes(options.keepWarmMinutes)
 
   on('agent.spawn', async ($, e, next) => {
     const result = await next(e)
@@ -147,6 +176,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    turnBusy = true
     void makePlan($, model, e.text).catch(() => undefined)
 
     return next(e)
@@ -158,6 +188,10 @@ export const register: Register = (on, options) => {
     await classify($, model).catch(() => undefined)
     await advancePlan($, model).catch(() => undefined)
     await exportState($).catch(() => undefined)
+    if (e.agentId === undefined) {
+      turnBusy = false
+      if (keepWarm) startWarm($, warmMinutes)
+    }
 
     return result
   })
