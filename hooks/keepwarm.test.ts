@@ -5,6 +5,8 @@ import {
   clampKeepWarmMinutes,
   endsLoop,
   keepWarmEnabled,
+  parseWarmCommand,
+  warmStatusLine,
   shouldPing,
 } from './keepwarm'
 
@@ -34,4 +36,17 @@ test('only nothing-to-fork ends the loop', () => {
   expect(endsLoop({ isAnswered: false, reason: 'nothing-to-fork' })).toBe(true)
   expect(endsLoop({ isAnswered: false, reason: 'api-error' })).toBe(false)
   expect(endsLoop({ isAnswered: true })).toBe(false)
+})
+
+test('/keepwarm takes on, off, status or nothing', () => {
+  expect(parseWarmCommand('')).toBe('status')
+  expect(parseWarmCommand(' Status ')).toBe('status')
+  expect(parseWarmCommand('ON')).toBe('on')
+  expect(parseWarmCommand('off')).toBe('off')
+  expect(parseWarmCommand('maybe')).toBeNull()
+})
+
+test('the status line names the state and the interval', () => {
+  expect(warmStatusLine(true, 3)).toContain('every 3 min')
+  expect(warmStatusLine(false, 3)).toBe('keep warm is off')
 })

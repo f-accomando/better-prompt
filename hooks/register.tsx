@@ -6,7 +6,7 @@ import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
 import { crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, planSize, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
 import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, planValue, type Plan } from './plan'
 import { STATE_PATH, buildState, stateText } from './state'
-import { PING_PROMPT, clampKeepWarmMinutes, endsLoop, keepWarmEnabled, shouldPing } from './keepwarm'
+import { PING_PROMPT, clampKeepWarmMinutes, endsLoop, keepWarmEnabled, parseWarmCommand, shouldPing, warmStatusLine } from './keepwarm'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
   divergence,
@@ -128,6 +128,7 @@ async function exportState($: EngineInterface) {
 let warmTimer: { cancel: () => void } | null = null
 let turnBusy = false
 let warmStopped = false
+let warmOn = false
 
 // Reads the whole cached conversation back through a fork, which renews the cache entry; the reply is dropped.
 async function ping($: EngineInterface) {
@@ -154,7 +155,7 @@ export const register: Register = (on, options) => {
   const model = typeof options.model === 'string' ? options.model : 'haiku'
   const gaugeAt = clampGauge(options.gaugeWarnPercent, 45)
   const divWarn = clampGauge(options.divergeWarnPercent, 50)
-  const keepWarm = keepWarmEnabled(options.keepWarm)
+  warmOn = keepWarmEnabled(options.keepWarm)
   const warmMinutes = clampKeepWarmMinutes(options.keepWarmMinutes)
 
   on('agent.spawn', async ($, e, next) => {
@@ -175,6 +176,31 @@ export const register: Register = (on, options) => {
     return r
   })
 
+  on('session.start', async ($, e, next) => {
+    await $.command.register({
+      name: 'keepwarm',
+      description: 'Keep the prompt cache warm while idle: on, off or status',
+      argumentHint: 'on|off|status',
+    })
+
+    return next(e)
+  })
+
+  // Switches the loop for this session only; the saved setting is what a restart starts from.
+  on('command.run', { command: 'keepwarm' }, async ($, e) => {
+    const cmd = parseWarmCommand(e.args)
+    if (cmd === null) return { text: 'Usage: /keepwarm on|off|status' }
+    if (cmd === 'on') {
+      warmOn = true
+      if (!turnBusy) startWarm($, warmMinutes)
+    } else if (cmd === 'off') {
+      warmOn = false
+      stopWarm()
+    }
+
+    return { text: warmStatusLine(warmOn, warmMinutes) }
+  })
+
   on('prompt.submit', async ($, e, next) => {
     turnBusy = true
     void makePlan($, model, e.text).catch(() => undefined)
@@ -190,7 +216,7 @@ export const register: Register = (on, options) => {
     await exportState($).catch(() => undefined)
     if (e.agentId === undefined) {
       turnBusy = false
-      if (keepWarm) startWarm($, warmMinutes)
+      if (warmOn) startWarm($, warmMinutes)
     }
 
     return result

@@ -81,6 +81,9 @@ fork (a new session, or right after `/clear`) until the next turn. There is no c
 open. Each ping bills the full context at the cache-read rate and counts toward your limits, so turn it off when you
 walk away for good.
 
+`/keepwarm on`, `/keepwarm off` and `/keepwarm status` switch the loop for the current session without a restart. The
+command changes the running session only; the `keepWarm` setting is what the next session starts from.
+
 ## Costs
 
 Each prompt of 20 characters or more costs one small model call (haiku by default) over a brief of

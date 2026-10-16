@@ -28,3 +28,19 @@ export function shouldPing(s: PingState): boolean {
 export function endsLoop(r: { isAnswered: boolean; reason?: string }): boolean {
   return !r.isAnswered && r.reason === 'nothing-to-fork'
 }
+
+export type WarmCommand = 'on' | 'off' | 'status'
+
+/** `/keepwarm` argument: empty or `status` reports, `on`/`off` switch; anything else is refused with null. */
+export function parseWarmCommand(args: string): WarmCommand | null {
+  const a = args.trim().toLowerCase()
+  if (a === '' || a === 'status') return 'status'
+  if (a === 'on' || a === 'off') return a
+  return null
+}
+
+export function warmStatusLine(on: boolean, minutes: number): string {
+  return on
+    ? `keep warm is on: a ping every ${minutes} min while the session is idle`
+    : 'keep warm is off'
+}
