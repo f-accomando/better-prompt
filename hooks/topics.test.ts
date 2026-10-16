@@ -1,7 +1,6 @@
 import { test, expect } from 'claude-code/testing'
 
 import {
-  adviceRows,
   divergence,
   emptyTopics,
   lastIsNew,
@@ -54,28 +53,4 @@ test('topics line lists the last three names, cut with an ellipsis', () => {
   const long = topicsLine({ names: ['x'.repeat(50), 'y'.repeat(50)], trail: [] })
   expect(long.endsWith('…')).toBe(true)
   expect(long.length <= 'topics 2 · '.length + 60).toBe(true)
-})
-
-const base = { lastNew: false, topic: 't', topics: 1, div: 0, ctxPercent: 10, warnAt: 60, divWarn: 50 }
-
-test('no advice on a calm, small chat', () => {
-  expect(adviceRows(base)).toEqual([])
-})
-
-test('new topic, diverging and size rows in that order, at most two', () => {
-  const rows = adviceRows({ ...base, lastNew: true, topic: 'bm docs', topics: 3, ctxPercent: 70 })
-  expect(rows).toHaveLength(2)
-  expect(rows[0]?.kind).toBe('branch')
-  expect(rows[0]?.text).toContain('New topic "bm docs"')
-  expect(rows[0]?.tone).toBe('amber')
-  expect(rows[1]?.kind).toBe('diverge')
-  expect(rows[1]?.text).toContain('(3 topics, 0%)')
-})
-
-test('divergence threshold alone triggers the diverging row; size row is dim', () => {
-  const rows = adviceRows({ ...base, div: 50, ctxPercent: 60 })
-  expect(rows.map(r => r.kind)).toEqual(['diverge', 'size'])
-  expect(rows[1]?.tone).toBe('dim')
-  expect(rows[1]?.text).toBe('Context 60% full. /compact to shrink it.')
-  expect(adviceRows({ ...base, div: 49 })).toEqual([])
 })

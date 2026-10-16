@@ -3,15 +3,13 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { CrewMember, Gauge, Limits } from '../types'
 import { clampGauge, crabs, gaugeBar, gaugeLevel, kTokens } from './gauge'
-import { adviceSize, adviceSvg, crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, planSize, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
+import { crewAlt, crewSize, crewSvg, meterSize, meterSvg, planBarSvg, planSize, CTX_H, METER_BAR_W, METER_LABEL_W, type Meter } from './draw'
 import { DONE_SYSTEM, PLAN_SYSTEM, applyDone, doneAsk, doneCount, isFinished, parsePlan, planAsk, planLine, planValue, type Plan } from './plan'
 import { STATE_PATH, buildState, stateText } from './state'
 import { SYSTEM, askText, isSkippable, parseVerdict } from './judge'
 import {
-  adviceRows,
   divergence,
   emptyTopics,
-  lastIsNew,
   recordVerdict,
   reset,
   resetKeepLast,
@@ -127,7 +125,6 @@ async function exportState($: EngineInterface) {
 
 export const register: Register = (on, options) => {
   const model = typeof options.model === 'string' ? options.model : 'haiku'
-  const warnAt = Number(options.sizeWarnPercent ?? 60)
   const gaugeAt = clampGauge(options.gaugeWarnPercent, 45)
   const divWarn = clampGauge(options.divergeWarnPercent, 50)
 
@@ -172,7 +169,7 @@ export const register: Register = (on, options) => {
     const crabTotal = crew.length
     if (e.props.hasSurvey) return next(e)
     const topicN = topicCount(t)
-    // The topic bar runs 0-5 with its tick at 3, where the "chat is diverging" advice starts.
+    // The topic bar runs 0-5 with its tick at 3, where the divergence mark sits.
     const topicPct = Math.min(100, (topicN / TOPIC_MAX) * 100)
 
     const ui = $.ui.resolve(e)
@@ -180,15 +177,6 @@ export const register: Register = (on, options) => {
     const Svg = 'Svg' in ui ? ui.Svg : null
     const lim = await read($, limits)
     const div = divergence(t)
-    const rows = adviceRows({
-      lastNew: lastIsNew(t),
-      topic: t.names[t.names.length - 1] ?? '',
-      topics: topicCount(t),
-      div,
-      ctxPercent: g?.percent ?? 0,
-      warnAt,
-      divWarn,
-    })
     const ctxValue = (c: Gauge) =>
       `${c.percent}%${c.tokens === undefined ? '' : ` ${kTokens(c.tokens)}`}`
     // One SVG per meter (label, bar, value), all the same height, so the three sit on one line.
@@ -297,25 +285,6 @@ export const register: Register = (on, options) => {
               String(topicN),
             )}
           </Box>
-        )}
-        {rows.map(r =>
-          Svg !== null ? (
-            <Svg
-              key={r.kind}
-              source={adviceSvg(r.text, r.tone)}
-              alt={r.text}
-              width={adviceSize(r.text).width}
-              height={adviceSize(r.text).height}
-            />
-          ) : r.tone === 'amber' ? (
-            <Text key={r.kind} color="yellow">
-              {r.text}
-            </Text>
-          ) : (
-            <Text key={r.kind} dimColor>
-              {r.text}
-            </Text>
-          ),
         )}
       </Box>
     )
