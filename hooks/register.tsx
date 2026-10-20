@@ -77,9 +77,6 @@ async function classify($: EngineInterface, model: string) {
   await update($, topicsAtom, t =>
     recordVerdict(turns.length === 1 ? reset() : (t ?? emptyTopics()), verdict),
   )
-  if (verdict.thread === 'new' && turns.length >= 2) {
-    $.ui.toast(`New topic (${verdict.topic}): see the band above the prompt`)
-  }
 }
 
 // Task bar, step 1: when a prompt is sent, list its points. Runs beside the prompt and never holds it.
